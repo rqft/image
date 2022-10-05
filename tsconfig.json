@@ -1,0 +1,22 @@
+{
+    "compilerOptions": {
+      "resolveJsonModule": true,
+      "esModuleInterop": true,
+      "rootDir": "./src",
+      "outDir": "./dist",
+      "composite": true,
+      "moduleResolution": "node",
+      "removeComments": true,
+      "strict": true,
+      "noUnusedLocals": true,
+      "noUnusedParameters": true,
+      "noImplicitReturns": false,
+      "noFallthroughCasesInSwitch": true,
+      // "noUncheckedIndexedAccess": true,
+      "skipLibCheck": true,
+      "forceConsistentCasingInFileNames": true,
+      "target": "ES2015",
+      "downlevelIteration": true,
+      "module": "CommonJS"
+    }
+  }
