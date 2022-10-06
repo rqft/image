@@ -45,12 +45,28 @@ export class Editor {
     x |= 0;
     y |= 0;
 
+    if (x < 0 || x > this.width) {
+      throw new RangeError(`x value out of bounds {0 <= x <= ${this.width}}`);
+    }
+
+    if (y < 0 || y > this.height) {
+      throw new RangeError(`y value out of bounds {0 <= y <= ${this.height}}`);
+    }
+
     return this.view.getUint32(x + y * this.width, false);
   }
 
   public set(x: number, y: number, value: number): this {
     x |= 0;
     y |= 0;
+
+    if (x < 0 || x > this.width) {
+      throw new RangeError(`x value out of bounds {0 <= x <= ${this.width}}`);
+    }
+
+    if (y < 0 || y > this.height) {
+      throw new RangeError(`y value out of bounds {0 <= y <= ${this.height}}`);
+    }
 
     this.view.setUint32(x + y * this.width, value, false);
     return this;
@@ -145,7 +161,7 @@ export class Editor {
     });
   }
 
-  public saturation_additive(amount: number, scalar?: boolean) {
+  public saturation(amount: number, scalar?: boolean) {
     return this.map((value) => {
       const hsla = value.hsla();
 
@@ -171,6 +187,68 @@ export class Editor {
 
       return hsla;
     });
+  }
+
+  public hue_shift(amount: number) {
+    amount %= 360;
+    return this.map((value) => {
+      const hsla = value.hsla();
+
+      hsla.h += amount;
+      hsla.h %= 360;
+
+      return hsla;
+    });
+  }
+
+  public greyscale() {
+    return this.saturation(0.0, true);
+  }
+
+  public grayscale() {
+    return this.saturation(0.0, true);
+  }
+
+  public invert(type: InvertType) {
+    if (type === "all") {
+      return this.map(({ value }) => {
+        return ((0xffffffff - value) & 0xffffff00) | (value & 0xff);
+      });
+    }
+
+    return this.map((color) => {
+      const hsla = color.hsla();
+      switch (type) {
+        case "luminosity": {
+          hsla.l = 1 - hsla.l;
+          return hsla;
+        }
+
+        case "saturation": {
+          hsla.s = 1 - hsla.s;
+          return hsla;
+        }
+
+        case "luminosity": {
+          hsla.l = 1 - hsla.l;
+          return hsla;
+        }
+
+        default: {
+          throw new RangeError(`Unknown inversion type '${type}'`);
+        }
+      }
+    });
+  }
+
+  public crop([x1, y1]: [number, number], [x2, y2]: [number, number]) {
+    if (x1 >= x2 || y1 >= y2) {
+      throw new RangeError(
+        "ending point must be larger than the starting point"
+      );
+    }
+
+    const out = Editor.new(x2 - x1, y2 - y1);
   }
 
   public rotate(degrees: number, resize: boolean = false): this {
@@ -278,11 +356,17 @@ export class Editor {
       }
     }
   }
+
+  public static new(w: number, h: number) {
+    return new this(w, h);
+  }
 }
+
+export type InvertType = "hue" | "saturation" | "luminosity" | "all";
 
 function interpolate(
   input: Editor,
-  out: { width: number; u8: Uint8Array },
+  out: Readonly<{ width: number; u8: Uint8Array }>,
   x0: number,
   y0: number,
   x1: number,
