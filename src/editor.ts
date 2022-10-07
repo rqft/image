@@ -1,18 +1,15 @@
 import { Color, ColorLike } from "./color";
 import { TypedArray } from "./typed-arrays";
-import { view } from "./util";
-export class Editor {
+import { clamp, view } from "./util";
+// hm
+export class Editor<W extends number, H extends number> {
   public u8: TypedArray.u8;
   public view: DataView;
   public u32: TypedArray.u32;
 
-  constructor(
-    public width: number,
-    public height: number,
-    source?: BufferSource
-  ) {
-    this.width |= 0;
-    this.height |= 0;
+  constructor(public width: W, public height: H, source?: BufferSource) {
+    this.width = (this.width | 0) as W;
+    this.height = (this.height | 0) as H;
 
     if (source) {
       this.u8 = view(source);
@@ -37,11 +34,11 @@ export class Editor {
     }
   }
 
-  public clone(): Editor {
+  public clone(): Editor<W, H> {
     return new Editor(this.width, this.height, this.u8);
   }
 
-  public get(x: number, y: number): number {
+  public get(x: number, y: number): Color {
     x |= 0;
     y |= 0;
 
@@ -53,10 +50,10 @@ export class Editor {
       throw new RangeError(`y value out of bounds {0 <= y <= ${this.height}}`);
     }
 
-    return this.view.getUint32(x + y * this.width, false);
+    return new Color(this.view.getUint32(x + y * this.width, false));
   }
 
-  public set(x: number, y: number, value: number): this {
+  public set(x: number, y: number, value: ColorLike): this {
     x |= 0;
     y |= 0;
 
@@ -68,13 +65,16 @@ export class Editor {
       throw new RangeError(`y value out of bounds {0 <= y <= ${this.height}}`);
     }
 
-    this.view.setUint32(x + y * this.width, value, false);
+    this.view.setUint32(x + y * this.width, Color.parse(value), false);
     return this;
   }
 
-  public resize_nearest(width: number, height: number): this {
-    width |= 0;
-    height |= 0;
+  public resize_nearest<nW extends number, nH extends number>(
+    width: nW,
+    height: nH
+  ): Editor<nW, nH> {
+    width = (width | 0) as nW;
+    height = (height | 0) as nH;
 
     const old = this.u32;
     const [old_width, old_height] = [this.width, this.height];
@@ -96,12 +96,12 @@ export class Editor {
       }
     }
 
-    this.width = width;
-    this.height = height;
+    this.width = width as never;
+    this.height = height as never;
     this.u8 = new Uint8Array(u32.buffer);
     this.view = new DataView(u32.buffer);
 
-    return this;
+    return this as never;
   }
 
   public flip_horizontal() {
@@ -161,29 +161,52 @@ export class Editor {
     });
   }
 
-  public saturation(amount: number, scalar?: boolean) {
+  // HSLA modifiers
+  public saturation(type: ModifyType, amount: number) {
     return this.map((value) => {
       const hsla = value.hsla();
 
-      if (scalar) {
-        hsla.s *= amount;
-      } else {
-        hsla.s += amount;
+      switch (type) {
+        case "add": {
+          hsla.s += amount;
+          break;
+        }
+        case "scale": {
+          hsla.s *= amount;
+          break;
+        }
+        case "value": {
+          hsla.s = amount;
+          break;
+        }
       }
+
+      hsla.s = clamp(0, 1, hsla.l);
 
       return hsla;
     });
   }
 
-  public luminosity(amount: number, scalar?: boolean) {
+  public luminosity(type: ModifyType, amount: number) {
     return this.map((value) => {
       const hsla = value.hsla();
 
-      if (scalar) {
-        hsla.l *= amount;
-      } else {
-        hsla.l += amount;
+      switch (type) {
+        case "add": {
+          hsla.l += amount;
+          break;
+        }
+        case "scale": {
+          hsla.l *= amount;
+          break;
+        }
+        case "value": {
+          hsla.l = amount;
+          break;
+        }
       }
+
+      hsla.l = clamp(0, 1, hsla.l);
 
       return hsla;
     });
@@ -195,19 +218,138 @@ export class Editor {
       const hsla = value.hsla();
 
       hsla.h += amount;
+
+      if (hsla.h < 0) {
+        hsla.h = 360 - hsla.h;
+      }
+
       hsla.h %= 360;
 
       return hsla;
     });
   }
 
+  /**
+   * @alias grayscale
+   */
   public greyscale() {
-    return this.saturation(0.0, true);
+    return this.saturation("value", 0);
   }
 
+  /**
+   * @alias greyscale
+   */
   public grayscale() {
-    return this.saturation(0.0, true);
+    return this.saturation("value", 0);
   }
+
+  // RGBA modifiers
+
+  public red(type: ModifyType, amount: number) {
+    return this.map((value) => {
+      const rgba = value.rgba();
+
+      switch (type) {
+        case "add": {
+          rgba.r += amount;
+          break;
+        }
+        case "scale": {
+          rgba.r *= amount;
+          break;
+        }
+        case "value": {
+          rgba.r = amount;
+          break;
+        }
+      }
+
+      rgba.r = clamp(0x00, 0xff, rgba.r);
+
+      return rgba;
+    });
+  }
+
+  public green(type: ModifyType, amount: number) {
+    return this.map((value) => {
+      const rgba = value.rgba();
+
+      switch (type) {
+        case "add": {
+          rgba.g += amount;
+          break;
+        }
+        case "scale": {
+          rgba.g *= amount;
+          break;
+        }
+        case "value": {
+          rgba.g = amount;
+          break;
+        }
+      }
+
+      rgba.r = clamp(0x00, 0xff, rgba.r);
+
+      return rgba;
+    });
+  }
+
+  public blue(type: ModifyType, amount: number) {
+    return this.map((value) => {
+      const rgba = value.rgba();
+
+      switch (type) {
+        case "add": {
+          rgba.b += amount;
+          break;
+        }
+        case "scale": {
+          rgba.b *= amount;
+          break;
+        }
+        case "value": {
+          rgba.b = amount;
+          break;
+        }
+      }
+
+      rgba.b = clamp(0x00, 0xff, rgba.r);
+
+      return rgba;
+    });
+  }
+
+  public alpha(type: ModifyType, amount: number) {
+    return this.map((value) => {
+      const rgba = value.rgba();
+
+      switch (type) {
+        case "add": {
+          rgba.a += amount;
+          break;
+        }
+        case "scale": {
+          rgba.a *= amount;
+          break;
+        }
+        case "value": {
+          rgba.a = amount;
+          break;
+        }
+      }
+
+      rgba.a = clamp(0x00, 0xff, rgba.r);
+
+      return rgba;
+    });
+  }
+
+  public opacity(type: ModifyType, amount: number): this {
+    return this.alpha(type, amount);
+  }
+
+  // other
 
   public invert(type: InvertType) {
     if (type === "all") {
@@ -249,6 +391,14 @@ export class Editor {
     }
 
     const out = Editor.new(x2 - x1, y2 - y1);
+
+    for (let y = y1; y < y2; y++) {
+      for (let x = x1; x < x2; x++) {
+        out.set(x - y2, y - y1, this.get(x, y));
+      }
+    }
+
+    return out;
   }
 
   public rotate(degrees: number, resize: boolean = false): this {
@@ -357,15 +507,56 @@ export class Editor {
     }
   }
 
-  public static new(w: number, h: number) {
+  public scale(amount: number) {
+    return this.resize_nearest(amount * this.width, amount * this.height);
+  }
+
+  public place<P extends number, U extends number>(
+    source: Editor<P, U>,
+    [x1, y1]: [number, number]
+  ) {
+    for (let y = y1; y < Math.min(source.height, this.height); y++) {
+      for (let x = x1; x < Math.min(source.width, this.width); x++) {
+        this.set(x, y, source.get(x - x1, y - y1));
+      }
+    }
+
+    return this;
+  }
+
+  public size() {
+    return this.width * this.height;
+  }
+
+  public *iterate() {
+    for (let y = 0; y < this.height; y++) {
+      for (let x = 0; x < this.width; x++) {
+        yield [x,y]
+      }
+    }
+  }
+
+  public static new<W extends number, H extends number>(
+    w: W,
+    h: H
+  ): Editor<W, H> {
     return new this(w, h);
+  }
+
+  public static color<W extends number, H extends number>(
+    color: ColorLike,
+    w: W,
+    h: H
+  ): Editor<W, H> {
+    return this.new(w, h).fill(color);
   }
 }
 
 export type InvertType = "hue" | "saturation" | "luminosity" | "all";
+export type ModifyType = "add" | "scale" | "value";
 
-function interpolate(
-  input: Editor,
+function interpolate<W extends number, H extends number>(
+  input: Editor<W, H>,
   out: Readonly<{ width: number; u8: Uint8Array }>,
   x0: number,
   y0: number,
@@ -415,3 +606,5 @@ function pawn(
     reference.b += wa * input.u8[2 + offset];
   }
 }
+
+new Editor(1, 1).opacity;
