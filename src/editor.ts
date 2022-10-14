@@ -2,14 +2,18 @@ import { Color, ColorLike } from "./color";
 import { TypedArray } from "./typed-arrays";
 import { clamp, view } from "./util";
 // hm
-export class Editor<W extends number, H extends number> {
+export class Editor {
   public u8: TypedArray.u8;
   public view: DataView;
   public u32: TypedArray.u32;
 
-  constructor(public width: W, public height: H, source?: BufferSource) {
-    this.width = (this.width | 0) as W;
-    this.height = (this.height | 0) as H;
+  constructor(
+    public width: number,
+    public height: number,
+    source?: BufferSource
+  ) {
+    this.width = this.width | 0;
+    this.height = this.height | 0;
 
     if (source) {
       this.u8 = view(source);
@@ -34,7 +38,7 @@ export class Editor<W extends number, H extends number> {
     }
   }
 
-  public clone(): Editor<W, H> {
+  public clone(): Editor {
     return new Editor(this.width, this.height, this.u8);
   }
 
@@ -69,12 +73,9 @@ export class Editor<W extends number, H extends number> {
     return this;
   }
 
-  public resize_nearest<nW extends number, nH extends number>(
-    width: nW,
-    height: nH
-  ): Editor<nW, nH> {
-    width = (width | 0) as nW;
-    height = (height | 0) as nH;
+  public resize_nearest(width: number, height: number): Editor {
+    width = width | 0;
+    height = height | 0;
 
     const old = this.u32;
     const [old_width, old_height] = [this.width, this.height];
@@ -104,7 +105,7 @@ export class Editor<W extends number, H extends number> {
     return this as never;
   }
 
-  public flip_horizontal() {
+  public flip_horizontal(): this {
     let offset = 0;
 
     for (let y = 0; y < this.height; y++) {
@@ -383,7 +384,7 @@ export class Editor<W extends number, H extends number> {
     });
   }
 
-  public crop([x1, y1]: [number, number], [x2, y2]: [number, number]) {
+  public crop([x1, y1]: [number, number], [x2, y2]: [number, number]): Editor {
     if (x1 >= x2 || y1 >= y2) {
       throw new RangeError(
         "ending point must be larger than the starting point"
@@ -422,8 +423,8 @@ export class Editor<W extends number, H extends number> {
       case 90: {
         const { width, height, u32: old } = this;
 
-        this.width = height;
-        this.height = width;
+        this.width = height as never;
+        this.height = width as never;
 
         for (let y = 0; y < width; y++) {
           const y_offset = y * width;
@@ -511,10 +512,7 @@ export class Editor<W extends number, H extends number> {
     return this.resize_nearest(amount * this.width, amount * this.height);
   }
 
-  public place<P extends number, U extends number>(
-    source: Editor<P, U>,
-    [x1, y1]: [number, number]
-  ) {
+  public place(source: Editor, [x1, y1]: [number, number]) {
     for (let y = y1; y < Math.min(source.height, this.height); y++) {
       for (let x = x1; x < Math.min(source.width, this.width); x++) {
         this.set(x, y, source.get(x - x1, y - y1));
@@ -531,23 +529,16 @@ export class Editor<W extends number, H extends number> {
   public *iterate() {
     for (let y = 0; y < this.height; y++) {
       for (let x = 0; x < this.width; x++) {
-        yield [x,y]
+        yield [x, y] as const;
       }
     }
   }
 
-  public static new<W extends number, H extends number>(
-    w: W,
-    h: H
-  ): Editor<W, H> {
+  public static new(w: number, h: number): Editor {
     return new this(w, h);
   }
 
-  public static color<W extends number, H extends number>(
-    color: ColorLike,
-    w: W,
-    h: H
-  ): Editor<W, H> {
+  public static color(color: ColorLike, w: number, h: number): Editor {
     return this.new(w, h).fill(color);
   }
 }
@@ -555,8 +546,8 @@ export class Editor<W extends number, H extends number> {
 export type InvertType = "hue" | "saturation" | "luminosity" | "all";
 export type ModifyType = "add" | "scale" | "value";
 
-function interpolate<W extends number, H extends number>(
-  input: Editor<W, H>,
+function interpolate(
+  input: Editor,
   out: Readonly<{ width: number; u8: Uint8Array }>,
   x0: number,
   y0: number,
