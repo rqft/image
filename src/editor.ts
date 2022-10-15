@@ -241,7 +241,7 @@ export class Editor {
     });
   }
 
-  public crop([x1, y1]: [number, number], [x2, y2]: [number, number]) {
+  public crop([x1, y1]: [number, number], [x2, y2]: [number, number]): Editor {
     if (x1 >= x2 || y1 >= y2) {
       throw new RangeError(
         "ending point must be larger than the starting point"
@@ -249,6 +249,14 @@ export class Editor {
     }
 
     const out = Editor.new(x2 - x1, y2 - y1);
+
+    for (let y = y1; y <= y2; y++) {
+      for (let x = x1; x <= x2; x++) {
+        out.set(x - x1, y - y1, this.get(x, y));
+      }
+    }
+
+    return out;
   }
 
   public rotate(degrees: number, resize: boolean = false): this {
